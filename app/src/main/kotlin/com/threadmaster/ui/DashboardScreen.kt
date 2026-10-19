@@ -111,6 +111,8 @@ fun DashboardScreen(vm: MonitorViewModel, onPickApp: () -> Unit) {
 
         item { GpuCard(snap) }
 
+        item { FpsCard(snap) }
+
         item { MemoryCard(snap) }
 
         item { ThermalCard(snap) }
@@ -616,6 +618,63 @@ private fun SystemLoadCard(snap: SystemSnapshot?) {
                     fontSize = 10.sp,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun FpsCard(snap: SystemSnapshot?) {
+    val fps = snap?.fps ?: Float.NaN
+    val refresh = snap?.refreshHz ?: Float.NaN
+    val latency = snap?.renderLatencyMs ?: Float.NaN
+    val frameTime = if (fps.isFinite() && fps > 0f) 1000f / fps else Float.NaN
+    val layer = snap?.fpsLayer.orEmpty()
+
+    TmCard(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SectionLabel("帧率与呈现")
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = if (layer.isEmpty()) "未匹配图层" else layer.take(22),
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row {
+            Column(Modifier.weight(1f)) {
+                MetricCell("FPS", fmt(fps, 0))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "刷新 ${fmt(refresh, 0)}Hz",
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    fontSize = 10.sp,
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                MetricCell("帧时间", fmt(frameTime, 1), "ms")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "呈现延迟 ${fmt(latency, 1)}ms",
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    fontSize = 10.sp,
+                )
+            }
+        }
+        if (fps.isNaN() || fps == 0f) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (layer.isEmpty()) {
+                    "没有找到包含包名的 SurfaceFlinger 图层。游戏用独立 Surface 时 layer 名可能不含包名，" +
+                        "可以在设置里关闭帧率采样以减少开销。"
+                } else {
+                    "已定位到图层，但最近没有新帧。应用在静止画面或暂停时会显示 0。"
+                },
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                fontSize = 10.sp,
+            )
         }
     }
 }

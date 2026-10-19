@@ -61,6 +61,7 @@ data class SystemSnapshot(
     val gpuBusyPercent: Float = Float.NaN,
     val gpuTempC: Float = Float.NaN,
     val fps: Float = Float.NaN,
+    val renderLatencyMs: Float = Float.NaN,
     val fpsLayer: String = "",
     val refreshHz: Float = Float.NaN,
     val batteryCurrentMa: Float = Float.NaN,

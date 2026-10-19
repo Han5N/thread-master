@@ -139,7 +139,9 @@ class MonitorService : LifecycleService() {
                 val title = st.targetLabel.ifEmpty { st.targetPackage }
                 val cpu = snap?.cpuUsage?.takeIf { !it.isNaN() }?.let { String.format(Locale.US, "%.0f%%", it) } ?: "--"
                 val appCpu = snap?.targetCpuPercent?.takeIf { !it.isNaN() }?.let { String.format(Locale.US, "%.0f%%", it) } ?: "--"
-                updateNotification(title, "整机 CPU $cpu · 应用 $appCpu · ${snap?.targetThreadCount ?: 0} 线程")
+                val phaseText = if (st.phase == com.threadmaster.collector.MonitorPhase.WAITING) "等待进入应用 · " else ""
+                val fps = snap?.fps?.takeIf { !it.isNaN() && it > 0f }?.let { String.format(Locale.US, " · %.0ffps", it) } ?: ""
+                updateNotification(title, "${phaseText}整机 $cpu · 应用 $appCpu$fps · ${snap?.targetThreadCount ?: 0} 线程")
                 delay(2000)
             }
         }

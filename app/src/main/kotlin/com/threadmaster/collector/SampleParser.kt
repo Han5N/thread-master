@@ -38,6 +38,9 @@ class SampleParser {
     /** 屏幕刷新率，从 latency 输出的首行刷新周期换算，同样低频更新。 */
     private var lastRefreshHz = Float.NaN
 
+    /** 最近一次窗口内的平均呈现延迟，单位毫秒。 */
+    private var lastLatencyMs = Float.NaN
+
     /**
      * 喂入一行输出。
      *
@@ -63,9 +66,10 @@ class SampleParser {
             }
             line == "FPSE" -> {
                 inFps = false
-                val (fps, refresh) = parseFps(fpsLines, nowNs)
-                if (!fps.isNaN()) lastFps = fps
-                if (!refresh.isNaN()) lastRefreshHz = refresh
+                val result = parseFps(fpsLines, nowNs)
+                if (!result.fps.isNaN()) lastFps = result.fps
+                if (!result.refreshHz.isNaN()) lastRefreshHz = result.refreshHz
+                if (!result.latencyMs.isNaN()) lastLatencyMs = result.latencyMs
                 return null
             }
             inFps -> {
@@ -92,6 +96,7 @@ class SampleParser {
         prevTargetIoWrite = 0
         lastFps = Float.NaN
         lastRefreshHz = Float.NaN
+        lastLatencyMs = Float.NaN
     }
 
     private fun parseLine(line: String) {
@@ -379,6 +384,7 @@ class SampleParser {
             gpuBusyPercent = gpuBusyPct,
             gpuTempC = normalizeZoneTemp(raw.gpuTemp),
             fps = lastFps,
+            renderLatencyMs = lastLatencyMs,
             batteryCurrentMa = normalizeCurrent(raw.batCurrent),
             batteryVoltageV = normalizeVoltage(raw.batVoltage),
             batteryTempC = normalizeBatteryTemp(raw.batTemp),
@@ -413,31 +419,46 @@ class SampleParser {
         )
     }
 
-    private fun parseFps(lines: List<String>, nowNs: Long): Pair<Float, Float> {
+    private data class FpsResult(val fps: Float, val refreshHz: Float, val latencyMs: Float)
+
+    private fun parseFps(lines: List<String>, nowNs: Long): FpsResult {
         val refreshNs = lines.firstOrNull()?.trim()?.toLongOrNull()
         val refreshHz = if (refreshNs != null && refreshNs > 0) {
             1_000_000_000f / refreshNs
         } else {
             Float.NaN
         }
-        if (lines.size < 4) return Float.NaN to refreshHz
+        if (lines.size < 4) return FpsResult(Float.NaN, refreshHz, Float.NaN)
 
         val times = ArrayList<Long>(lines.size)
+        var latencySum = 0L
+        var latencyCount = 0
         for (i in 1 until lines.size) {
             // dumpsys 用空格对齐，列之间可能有多个空格，不能用单空格切分
             val parts = lines[i].trim().split(WHITESPACE)
             if (parts.size < 3) continue
+            val desired = parts[0].toLongOrNull() ?: 0L
             val actual = parts[1].toLongOrNull() ?: continue
             if (actual > 0) times.add(actual)
+            // 实际呈现时间减去期望呈现时间，就是这一帧多等的时间
+            if (actual > 0 && desired > 0 && actual > desired) {
+                latencySum += actual - desired
+                latencyCount++
+            }
         }
-        if (times.size < 2) return Float.NaN to refreshHz
+        val latencyMs = if (latencyCount > 0) {
+            (latencySum.toDouble() / latencyCount / 1_000_000.0).toFloat()
+        } else {
+            Float.NaN
+        }
+        if (times.size < 2) return FpsResult(Float.NaN, refreshHz, latencyMs)
         times.sort()
         val last = times.last()
         // latency 缓冲里可能全是暂停前的旧帧，超过 1 秒没有新帧就当作 0 fps，而不是虚报历史帧率
-        if (nowNs > last && nowNs - last > 1_000_000_000L) return 0f to refreshHz
+        if (nowNs > last && nowNs - last > 1_000_000_000L) return FpsResult(0f, refreshHz, latencyMs)
         val span = last - times.first()
-        if (span <= 0) return Float.NaN to refreshHz
-        return ((times.size - 1) * 1_000_000_000f / span).coerceIn(0f, 240f) to refreshHz
+        if (span <= 0) return FpsResult(Float.NaN, refreshHz, latencyMs)
+        return FpsResult(((times.size - 1) * 1_000_000_000f / span).coerceIn(0f, 240f), refreshHz, latencyMs)
     }
 
     private class RawBlock {
