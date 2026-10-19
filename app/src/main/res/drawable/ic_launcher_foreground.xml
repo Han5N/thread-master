@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 三根不等高的柱体，代表不同线程的占用 -->
+    <path
+        android:fillColor="#4ADE80"
+        android:pathData="M34,62h7v22h-7z" />
+    <path
+        android:fillColor="#4ADE80"
+        android:pathData="M50.5,52h7v32h-7z" />
+    <path
+        android:fillColor="#4ADE80"
+        android:pathData="M67,42h7v42h-7z" />
+    <!-- 一条上升的折线，代表性能曲线 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M30,56L45,44L56,49L71,32L80,36"
+        android:strokeColor="#38BDF8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="3.4" />
+</vector>
