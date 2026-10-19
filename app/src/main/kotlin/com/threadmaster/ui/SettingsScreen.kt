@@ -130,7 +130,7 @@ fun SettingsScreen(vm: MonitorViewModel) {
                 Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = { vm.diagnoseFps() },
-                    cornerRadius = 12.dp,
+                    cornerRadius = 0.dp,
                     colors = ButtonDefaults.buttonColors(
                         color = MiuixTheme.colorScheme.secondary,
                         contentColor = MiuixTheme.colorScheme.onSecondary,
@@ -197,7 +197,7 @@ fun SettingsScreen(vm: MonitorViewModel) {
                 SectionLabel("关于")
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Thread Master 0.2.1",
+                    "Thread Master 0.2.2",
                     color = MiuixTheme.colorScheme.onSurface,
                     fontSize = 13.sp,
                 )
@@ -221,7 +221,7 @@ fun SettingsScreen(vm: MonitorViewModel) {
 
     diagnosis?.let { text ->
         Dialog(onDismissRequest = { vm.dismissDiagnosis() }) {
-            Card(Modifier.fillMaxWidth()) {
+            Card(Modifier.fillMaxWidth(), cornerRadius = 0.dp) {
                 Text(
                     "帧率诊断",
                     color = MiuixTheme.colorScheme.onSurface,
@@ -247,7 +247,7 @@ fun SettingsScreen(vm: MonitorViewModel) {
                 Button(
                     onClick = { vm.dismissDiagnosis() },
                     modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 12.dp,
+                    cornerRadius = 0.dp,
                 ) {
                     Text("关闭", fontSize = 13.sp)
                 }

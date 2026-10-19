@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,7 +70,7 @@ fun AppPickerDialog(
                 )
                 Card(
                     modifier = Modifier.width(56.dp).height(32.dp),
-                    cornerRadius = 16.dp,
+                    cornerRadius = 0.dp,
                     onClick = onDismiss,
                     insideMargin = PaddingValues(0.dp),
                 ) {
@@ -85,8 +85,7 @@ fun AppPickerDialog(
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 label = "搜索应用名或包名",
-                singleLine = true,
-            )
+                singleLine = true, cornerRadius = 0.dp)
             Spacer(Modifier.height(8.dp))
 
             if (loading) {
@@ -120,14 +119,13 @@ private fun AppRow(app: TargetApp, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
             .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            onClick = onClick,
-        ) {
+            onClick = onClick, cornerRadius = 0.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AppIcon(packageName = app.packageName, size = 40.dp)
                 Spacer(Modifier.width(12.dp))

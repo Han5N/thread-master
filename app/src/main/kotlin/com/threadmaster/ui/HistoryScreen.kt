@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -112,8 +112,7 @@ private fun SessionCard(session: SessionEntity, onClick: () -> Unit, onLongClick
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick,
-        onLongPress = onLongClick,
-    ) {
+        onLongPress = onLongClick, cornerRadius = 0.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AppIcon(packageName = session.packageName, size = 38.dp)
             Spacer(Modifier.width(10.dp))
@@ -170,7 +169,7 @@ fun SessionDetailScreen(vm: MonitorViewModel, sessionId: Long, onBack: () -> Uni
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Card(
                     modifier = Modifier.size(44.dp),
-                    cornerRadius = 22.dp,
+                    cornerRadius = 0.dp,
                     onClick = onBack,
                     insideMargin = PaddingValues(0.dp),
                 ) {
@@ -325,7 +324,7 @@ private fun CurveCard(
             )
             Card(
                 modifier = Modifier.height(28.dp),
-                cornerRadius = 14.dp,
+                cornerRadius = 0.dp,
                 onClick = onClear,
                 insideMargin = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
             ) {
@@ -370,7 +369,7 @@ private fun ThreadSummaryRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
             .background(
                 if (selected) MiuixTheme.colorScheme.primary.copy(alpha = 0.12f)
                 else MiuixTheme.colorScheme.surfaceContainer

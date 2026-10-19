@@ -135,13 +135,24 @@ class MonitorEngine(
 
         job = scope.launch { readLoop(monitor) }
         watchdog = scope.launch {
-            delay(5000)
+            delay(8000)
+            val current = session
             if (job?.isActive == true && _snapshot.value == null) {
+                val stderr = current?.drainError().orEmpty()
                 mutex.withLock {
                     _state.value = _state.value.copy(
                         running = false,
                         phase = MonitorPhase.IDLE,
-                        error = "采集会话没有输出，可能是 su 授权被拒绝或脚本被系统拦截",
+                        error = buildString {
+                            append("采集会话没有输出：")
+                            append(
+                                when {
+                                    stderr.isNotBlank() -> stderr.take(160)
+                                    current == null || !current.isAlive() -> "脚本进程已退出，可能是 su 授权被拒绝或被执行策略拦截"
+                                    else -> "脚本在跑但没有产生完整数据块，可能是某个 sysfs 节点读取卡住"
+                                }
+                            )
+                        },
                     )
                     stopInternal()
                 }

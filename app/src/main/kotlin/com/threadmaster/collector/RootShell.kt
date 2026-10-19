@@ -134,9 +134,9 @@ class RootShell(private val context: Context) {
             null
         }
 
-        /** 消费 stderr，避免缓冲区写满把采集脚本卡死。 */
+        /** 非阻塞地取一行 stderr，缓冲区写满时也要能消费掉，否则脚本会被阻塞。 */
         fun drainError(): String = try {
-            errReader.readLine() ?: ""
+            if (errReader.ready()) errReader.readLine().orEmpty() else ""
         } catch (e: Exception) {
             ""
         }

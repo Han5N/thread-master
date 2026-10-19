@@ -5,7 +5,7 @@
 Root 权限下的 Android 性能监控与记录工具。它不只告诉你"整机 CPU 多少"，而是锁定一个应用，
 把它所有进程、所有线程的占用摊开记录下来——用来回答"这个游戏到底是谁在吃 CPU"。
 
-**[下载最新 APK](https://github.com/Han5N/thread-master/releases/latest)** · 当前版本 0.2.1，约 1.4 MB
+**[下载最新 APK](https://github.com/Han5N/thread-master/releases/latest)** · 当前版本 0.2.2，约 1.4 MB
 
 APK 由 GitHub Actions 构建并用仓库私钥签名，证书指纹（SHA-256）：
 `8A:DF:0B:98:29:A9:45:6A:66:BF:DF:E8:22:74:6C:7C:58:85:E2:2C:00:8D:10:56:EB:FF:10:41:E6:93:BD:14`

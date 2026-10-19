@@ -21,6 +21,8 @@ FG_STATE=0
 TICK=0
 MINMAX_READY=0
 GI_READY=0
+HAS_TIMEOUT=0
+command -v timeout >/dev/null 2>&1 && HAS_TIMEOUT=1
 
 echo $$ > "$PIDFILE"
 
@@ -256,7 +258,11 @@ emit_zram() {
 emit_foreground() {
   [ -n "$PKG" ] || { printf 'FG\t0\n'; return 0; }
   if [ $((TICK % 6)) -eq 0 ] || [ "$TICK" -lt 6 ]; then
-    LINE=$(dumpsys activity activities 2>/dev/null | grep -m1 -E "topResumedActivity|mResumedActivity")
+    if [ "$HAS_TIMEOUT" = "1" ]; then
+      LINE=$(timeout 3 dumpsys activity activities 2>/dev/null | grep -m1 -E "topResumedActivity|mResumedActivity")
+    else
+      LINE=$(dumpsys activity activities 2>/dev/null | grep -m1 -E "topResumedActivity|mResumedActivity")
+    fi
     case "$LINE" in
       *"$PKG/"*) FG_STATE=1 ;;
       *) FG_STATE=0 ;;
@@ -318,19 +324,25 @@ emit_threads() {
 
 # 骁龙 DRM 驱动直接导出实测帧率，纯 sysfs 读取，比 dumpsys 低两个数量级
 emit_drm_fps() {
+  [ "$FPS_ENABLED" = "1" ] || return 0
   for f in \
     /sys/class/drm/sde-crtc-0/measured_fps \
     /sys/class/drm/card0/sde-crtc-0/measured_fps \
     /sys/class/drm/card0/sde_crtc_fps \
     /sys/class/graphics/fb0/measured_fps; do
     [ -r "$f" ] || continue
-    if read -r v < "$f" 2>/dev/null; then
-      case "$v" in
-        ""|*"not available"*) continue ;;
-      esac
-      printf 'FPSD\t%s\t%s\n' "$f" "$v"
-      return 0
+    # 部分机型的 measured_fps 在显示管线繁忙时会长时间阻塞，必须带超时读
+    if [ "$HAS_TIMEOUT" = "1" ]; then
+      v=$(timeout 1 cat "$f" 2>/dev/null)
+    else
+      v=$(cat "$f" 2>/dev/null)
     fi
+    [ -n "$v" ] || continue
+    case "$v" in
+      *"not available"*) continue ;;
+    esac
+    printf 'FPSD\t%s\t%s\n' "$f" "$v"
+    return 0
   done
 }
 
@@ -338,7 +350,11 @@ emit_fps() {
   [ "$FPS_ENABLED" = "1" ] || return 0
   [ -n "$PKG" ] || return 0
   if [ -z "$LAYER" ] || [ $((TICK % 20)) -eq 0 ]; then
-    LIST=$(dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "$PKG")
+    if [ "$HAS_TIMEOUT" = "1" ]; then
+      LIST=$(timeout 3 dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "$PKG")
+    else
+      LIST=$(dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "$PKG")
+    fi
     LAYER=$(printf '%s\n' "$LIST" | grep -E "SurfaceView|BLAST" | tail -n 1)
     if [ -z "$LAYER" ]; then
       LAYER=$(printf '%s\n' "$LIST" | tail -n 1)
@@ -347,7 +363,11 @@ emit_fps() {
   fi
   if [ -n "$LAYER" ] && [ $((TICK % 4)) -eq 0 ]; then
     printf 'FPSB\n'
-    dumpsys SurfaceFlinger --latency "$LAYER" 2>/dev/null | head -n 130
+    if [ "$HAS_TIMEOUT" = "1" ]; then
+      timeout 3 dumpsys SurfaceFlinger --latency "$LAYER" 2>/dev/null | head -n 130
+    else
+      dumpsys SurfaceFlinger --latency "$LAYER" 2>/dev/null | head -n 130
+    fi
     printf 'FPSE\n'
   fi
 }

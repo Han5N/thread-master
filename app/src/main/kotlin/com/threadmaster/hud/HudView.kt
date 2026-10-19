@@ -106,9 +106,9 @@ class HudView(context: Context) : View(context) {
         val radius = dp * 14f
 
         rect.set(0f, 0f, w, h)
-        canvas.drawRoundRect(rect, radius, radius, bgPaint)
+        canvas.drawRect(rect, bgPaint)
         rect.inset(dp * 0.5f, dp * 0.5f)
-        canvas.drawRoundRect(rect, radius, radius, borderPaint)
+        canvas.drawRect(rect, borderPaint)
 
         val snap = snapshot
         if (snap == null) {
@@ -179,10 +179,10 @@ class HudView(context: Context) : View(context) {
             canvas.drawText("CPU${core.core}", pad, y, labelPaint)
             val barLeft = pad + dp * 40f
             val barRight = w - pad - dp * 82f
-            canvas.drawRoundRect(RectF(barLeft, y - dp * 8f, barRight, y - dp * 3f), dp * 2, dp * 2, barBgPaint)
-            canvas.drawRoundRect(
+            canvas.drawRect(RectF(barLeft, y - dp * 8f, barRight, y - dp * 3f), barBgPaint)
+            canvas.drawRect(
                 RectF(barLeft, y - dp * 8f, barLeft + (barRight - barLeft) * ratio, y - dp * 3f),
-                dp * 2, dp * 2, barPaint,
+                barPaint,
             )
             val pct = if (u.isFinite()) String.format(Locale.US, "%3.0f%%", u) else " -- "
             canvas.drawText(pct, w - pad - dp * 74f, y, rowPaint)
@@ -266,8 +266,8 @@ class HudView(context: Context) : View(context) {
             val max = if (core.maxKhz > 0) core.maxKhz else cores.maxOf { it.curKhz }.coerceAtLeast(1)
             val ratio = (core.curKhz.toFloat() / max).coerceIn(0f, 1f)
             val bh = (maxH * ratio).coerceAtLeast(dp * 1.5f)
-            canvas.drawRoundRect(RectF(x, y, x + barW, y + maxH), dp, dp, barBgPaint)
-            canvas.drawRoundRect(RectF(x, y + maxH - bh, x + barW, y + maxH), dp, dp, barPaint)
+            canvas.drawRect(RectF(x, y, x + barW, y + maxH), barBgPaint)
+            canvas.drawRect(RectF(x, y + maxH - bh, x + barW, y + maxH), barPaint)
         }
     }
 

@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -50,9 +50,9 @@ fun TmCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (onClick != null) {
-        Card(modifier = modifier, onClick = onClick, content = content)
+        Card(modifier = modifier, onClick = onClick, content = content, cornerRadius = 0.dp)
     } else {
-        Card(modifier = modifier, content = content)
+        Card(modifier = modifier, content = content, cornerRadius = 0.dp)
     }
 }
 
@@ -133,14 +133,14 @@ fun RatioBar(
         modifier
             .fillMaxWidth()
             .height(height.dp)
-            .clip(RoundedCornerShape(50))
+            .clip(RectangleShape)
             .background(MiuixTheme.colorScheme.surfaceContainerHighest),
     ) {
         Box(
             Modifier
                 .fillMaxWidth(ratio.coerceIn(0f, 1f))
                 .height(height.dp)
-                .clip(RoundedCornerShape(50))
+                .clip(RectangleShape)
                 .background(color),
         )
     }
@@ -166,7 +166,7 @@ fun CoreFreqBars(
                     Modifier
                         .fillMaxWidth()
                         .height((ratio * 34).dp)
-                        .clip(RoundedCornerShape(3.dp))
+                        .clip(RectangleShape)
                         .background(barColor.copy(alpha = 0.9f)),
                 )
                 Spacer(Modifier.height(3.dp))
@@ -194,7 +194,7 @@ fun AppIcon(packageName: String, size: Dp, modifier: Modifier = Modifier) {
     Box(
         modifier
             .size(size)
-            .clip(RoundedCornerShape(size * 0.28f))
+            .clip(RectangleShape)
             .background(MiuixTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center,
     ) {
@@ -228,7 +228,7 @@ fun SegmentedRow(options: List<String>, selected: Int, onSelect: (Int) -> Unit) 
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RectangleShape)
             .background(MiuixTheme.colorScheme.surfaceContainer)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -238,7 +238,7 @@ fun SegmentedRow(options: List<String>, selected: Int, onSelect: (Int) -> Unit) 
             Box(
                 Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(11.dp))
+                    .clip(RectangleShape)
                     .background(
                         if (active) MiuixTheme.colorScheme.primary
                         else Color.Transparent
@@ -269,7 +269,7 @@ fun TmConfirmDialog(
     danger: Boolean = false,
 ) {
     Dialog(onDismissRequest = onDismiss) {
-        Card(Modifier.fillMaxWidth()) {
+        Card(Modifier.fillMaxWidth(), cornerRadius = 0.dp) {
             Text(
                 text = title,
                 color = MiuixTheme.colorScheme.onSurface,
@@ -287,7 +287,7 @@ fun TmConfirmDialog(
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f),
-                    cornerRadius = 12.dp,
+                    cornerRadius = 0.dp,
                     colors = ButtonDefaults.buttonColors(
                         color = MiuixTheme.colorScheme.secondary,
                         contentColor = MiuixTheme.colorScheme.onSecondary,
@@ -296,7 +296,7 @@ fun TmConfirmDialog(
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f),
-                    cornerRadius = 12.dp,
+                    cornerRadius = 0.dp,
                     colors = ButtonDefaults.buttonColors(
                         color = if (danger) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
                         contentColor = if (danger) MiuixTheme.colorScheme.onError else MiuixTheme.colorScheme.onPrimary,

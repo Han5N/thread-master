@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -178,7 +178,7 @@ private fun TargetCard(
             Button(
                 onClick = onToggle,
                 modifier = Modifier.weight(1f),
-                cornerRadius = 14.dp,
+                cornerRadius = 0.dp,
                 colors = ButtonDefaults.buttonColors(
                     color = if (running) MiuixTheme.colorScheme.surfaceContainerHigh
                     else MiuixTheme.colorScheme.primary,
@@ -193,7 +193,7 @@ private fun TargetCard(
             }
             Button(
                 onClick = onPick,
-                cornerRadius = 14.dp,
+                cornerRadius = 0.dp,
                 colors = ButtonDefaults.buttonColors(
                     color = MiuixTheme.colorScheme.secondary,
                     contentColor = MiuixTheme.colorScheme.onSecondary,
@@ -203,7 +203,7 @@ private fun TargetCard(
             }
             Button(
                 onClick = onToggleHud,
-                cornerRadius = 14.dp,
+                cornerRadius = 0.dp,
                 colors = ButtonDefaults.buttonColors(
                     color = if (hudEnabled) MiuixTheme.colorScheme.primary
                     else MiuixTheme.colorScheme.secondary,
@@ -222,7 +222,7 @@ private fun WaitingBanner(label: String) {
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RectangleShape)
             .background(MiuixTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
@@ -248,7 +248,7 @@ private fun ErrorBanner(message: String) {
     Box(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RectangleShape)
             .background(MiuixTheme.colorScheme.error.copy(alpha = 0.12f))
             .padding(12.dp),
     ) {
