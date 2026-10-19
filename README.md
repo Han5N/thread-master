@@ -1,7 +1,14 @@
 # Thread Master
 
+[![Build APK](https://github.com/Han5N/thread-master/actions/workflows/build.yml/badge.svg)](https://github.com/Han5N/thread-master/actions/workflows/build.yml)
+
 Root 权限下的 Android 性能监控与记录工具。它不只告诉你"整机 CPU 多少"，而是锁定一个应用，
 把它所有进程、所有线程的占用摊开记录下来——用来回答"这个游戏到底是谁在吃 CPU"。
+
+**[下载最新 APK](https://github.com/Han5N/thread-master/releases/latest)** · 当前版本 0.1.0，约 1.2 MB
+
+APK 由 GitHub Actions 构建并用仓库私钥签名，证书指纹（SHA-256）：
+`8A:DF:0B:98:29:A9:45:6A:66:BF:DF:E8:22:74:6C:7C:58:85:E2:2C:00:8D:10:56:EB:FF:10:41:E6:93:BD:14`
 
 ## 能做什么
 
@@ -71,6 +78,20 @@ export ANDROID_HOME=/path/to/android-sdk
 ```
 
 产物在 `app/build/outputs/apk/debug/app-debug.apk`。
+
+正式包 `./gradlew :app:assembleRelease` 会开启 R8 与资源压缩（体积从 17 MB 降到 1.2 MB）。
+签名密钥通过环境变量注入，仓库里不含任何密钥材料：
+
+```bash
+export TM_KEYSTORE=/path/to/threadmaster.jks
+export TM_STORE_PASSWORD=...
+export TM_KEY_ALIAS=threadmaster
+export TM_KEY_PASSWORD=...
+./gradlew :app:assembleRelease
+```
+
+没有提供 `TM_KEYSTORE` 时会自动退回 debug 签名，保证任何人 clone 下来都能构建。
+CI 配置在 `.github/workflows/build.yml`，密钥存放在仓库 Secrets 中。
 
 ## 使用
 
