@@ -1,5 +1,6 @@
 package com.threadmaster.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -59,15 +60,15 @@ data class SysSampleEntity(
     val targetCpu: Float,
     val targetRssMb: Int,
     val threadCount: Int,
-    val gpuModel: String = "",
-    val gpuMaxMhz: Int = 0,
-    val refreshHz: Float = -1f,
-    val load1: Float = -1f,
-    val zramUsedMb: Int = 0,
-    val batteryPowerMw: Float = -1f,
-    val ctxtPerSec: Int = 0,
-    val targetIoReadKb: Int = 0,
-    val targetIoWriteKb: Int = 0,
+    @ColumnInfo(defaultValue = "") val gpuModel: String = "",
+    @ColumnInfo(defaultValue = "0") val gpuMaxMhz: Int = 0,
+    @ColumnInfo(defaultValue = "-1") val refreshHz: Float = -1f,
+    @ColumnInfo(defaultValue = "-1") val load1: Float = -1f,
+    @ColumnInfo(defaultValue = "0") val zramUsedMb: Int = 0,
+    @ColumnInfo(defaultValue = "-1") val batteryPowerMw: Float = -1f,
+    @ColumnInfo(defaultValue = "0") val ctxtPerSec: Int = 0,
+    @ColumnInfo(defaultValue = "0") val targetIoReadKb: Int = 0,
+    @ColumnInfo(defaultValue = "0") val targetIoWriteKb: Int = 0,
 )
 
 /** 线程级采样行。写入频率低于系统采样，避免高频小事务拖慢记录。 */

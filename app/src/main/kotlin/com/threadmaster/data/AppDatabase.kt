@@ -46,6 +46,8 @@ abstract class AppDatabase : RoomDatabase() {
                 "threadmaster.db",
             )
                 .addMigrations(MIGRATION_1_2)
+                // 迁移一旦失败就重建表，宁可丢老数据也不要让应用打不开
+                .fallbackToDestructiveMigration()
                 .build()
                 .also { instance = it }
         }
