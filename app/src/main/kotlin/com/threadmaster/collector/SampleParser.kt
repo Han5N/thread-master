@@ -41,6 +41,9 @@ class SampleParser {
     /** 最近一次窗口内的平均呈现延迟，单位毫秒。 */
     private var lastLatencyMs = Float.NaN
 
+    /** 当前块里内核 measured_fps 的读数，每块重置。 */
+    private var drmFps = Float.NaN
+
     /**
      * 喂入一行输出。
      *
@@ -52,6 +55,7 @@ class SampleParser {
             line == "B" -> {
                 inBlock = true
                 raw = RawBlock()
+                drmFps = Float.NaN
                 return null
             }
             line == "E" -> {
@@ -251,6 +255,14 @@ class SampleParser {
             }
             "FG" -> raw.foreground = body.trim() == "1"
             "FPSL" -> raw.fpsLayer = body.trim()
+            "FPSD" -> {
+                // 格式可能是 "60.00"、"fps: 60" 或 "60 0"，统一抓第一个数字
+                val f = body.split('\t')
+                if (f.size >= 2) {
+                    raw.drmFpsPath = f[0]
+                    drmFps = NUMBER.find(f[1])?.value?.toFloatOrNull() ?: Float.NaN
+                }
+            }
         }
     }
 
@@ -383,8 +395,13 @@ class SampleParser {
             gpuFreqKhz = raw.gpuCurKhz,
             gpuBusyPercent = gpuBusyPct,
             gpuTempC = normalizeZoneTemp(raw.gpuTemp),
-            fps = lastFps,
+            fps = if (drmFps.isFinite()) drmFps else lastFps,
             renderLatencyMs = lastLatencyMs,
+            fpsSource = when {
+                drmFps.isFinite() -> "drm"
+                lastFps.isFinite() -> "sf"
+                else -> ""
+            },
             batteryCurrentMa = normalizeCurrent(raw.batCurrent),
             batteryVoltageV = normalizeVoltage(raw.batVoltage),
             batteryTempC = normalizeBatteryTemp(raw.batTemp),
@@ -495,6 +512,7 @@ class SampleParser {
         var batteryStatus = ""
         var foreground = false
         var fpsLayer = ""
+        var drmFpsPath = ""
         var targetIoRead = 0L
         var targetIoWrite = 0L
         val temps = ArrayList<TempReading>(24)
@@ -528,6 +546,9 @@ class SampleParser {
 
     companion object {
         private val WHITESPACE = Regex("\\s+")
+
+        /** 从任意文本里抓第一个数字，兼容 measured_fps 的多种输出格式。 */
+        private val NUMBER = Regex("-?\\d+(?:\\.\\d+)?")
 
         /** 单线程占用率理论上限按核心数放宽，避免多核并行时被错误截断到 100。 */
         private val cpuCountUpperBound: Int

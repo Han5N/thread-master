@@ -75,6 +75,21 @@ class RootShell(private val context: Context) {
         exec("kill -9 \$(cat $PID_PATH 2>/dev/null) 2>/dev/null; rm -f $PID_PATH; echo TM_STOP_OK", timeoutMs = 4000)
     }
 
+    /**
+     * 帧率诊断：把 measured_fps 节点、SurfaceFlinger 图层列表和 latency 原始输出一次性取回来，
+     * 方便在真机上判断到底卡在哪一步。
+     */
+    suspend fun diagnoseFps(pkg: String): String {
+        val p = sanitize(pkg)
+        val cmd = "echo '# measured_fps'; " +
+            "for f in /sys/class/drm/sde-crtc-0/measured_fps /sys/class/drm/card0/sde-crtc-0/measured_fps /sys/class/graphics/fb0/measured_fps; do " +
+            "[ -r \"\$f\" ] && echo \"\$f = \$(cat \"\$f\" 2>/dev/null)\"; done; " +
+            "echo '# layers'; dumpsys SurfaceFlinger --list 2>/dev/null | grep -F '$p' | head -n 6; " +
+            "echo '# latency'; dumpsys SurfaceFlinger --list 2>/dev/null | grep -F '$p' | head -n 2 | while IFS= read -r l; do " +
+            "echo \"--- \$l\"; dumpsys SurfaceFlinger --latency \"\$l\" 2>&1 | head -n 4; done"
+        return exec(cmd, 20_000).output
+    }
+
     /** 查询包名对应的主进程 pid，没有运行返回 0。 */
     suspend fun pidOf(packageName: String): Int {
         val r = exec("pidof ${sanitize(packageName)}")

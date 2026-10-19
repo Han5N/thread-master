@@ -59,6 +59,9 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     private val _threadCurve = MutableStateFlow<List<ThreadPoint>>(emptyList())
     val threadCurve: StateFlow<List<ThreadPoint>> = _threadCurve.asStateFlow()
 
+    private val _diagnosis = MutableStateFlow<String?>(null)
+    val diagnosis: StateFlow<String?> = _diagnosis.asStateFlow()
+
     /** 载入可监控应用列表。桌面应用才有意义，系统服务不在其中。 */
     fun loadApps() {
         if (_appsLoading.value) return
@@ -121,6 +124,18 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
             val bucket = bucketFor(session)
             _threadCurve.value = repo.threadCurve(sessionId, tid, bucket)
         }
+    }
+
+    fun diagnoseFps() {
+        _diagnosis.value = "诊断中…"
+        viewModelScope.launch(Dispatchers.IO) {
+            _diagnosis.value = runCatching { engine.diagnoseFps() }
+                .getOrElse { "诊断失败：${'$'}{it.message}" }
+        }
+    }
+
+    fun dismissDiagnosis() {
+        _diagnosis.value = null
     }
 
     fun deleteSession(sessionId: Long) {

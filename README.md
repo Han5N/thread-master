@@ -5,7 +5,7 @@
 Root 权限下的 Android 性能监控与记录工具。它不只告诉你"整机 CPU 多少"，而是锁定一个应用，
 把它所有进程、所有线程的占用摊开记录下来——用来回答"这个游戏到底是谁在吃 CPU"。
 
-**[下载最新 APK](https://github.com/Han5N/thread-master/releases/latest)** · 当前版本 0.2.0，约 1.4 MB
+**[下载最新 APK](https://github.com/Han5N/thread-master/releases/latest)** · 当前版本 0.2.1，约 1.4 MB
 
 APK 由 GitHub Actions 构建并用仓库私钥签名，证书指纹（SHA-256）：
 `8A:DF:0B:98:29:A9:45:6A:66:BF:DF:E8:22:74:6C:7C:58:85:E2:2C:00:8D:10:56:EB:FF:10:41:E6:93:BD:14`
@@ -77,6 +77,11 @@ App 侧是状态机解析，相邻两帧做差得到占用率。latency 输出�
 - **缺失值**：拿不到的指标写 `-1` 入库，查询时用 `CASE WHEN` 排除，不会被算进均值。
 - **前台判定**：`dumpsys activity activities` 里取 `topResumedActivity`，用 `包名/` 前缀匹配，
   避免 `com.foo` 误中 `com.foobar`。
+- **温度分两种**：`thermal_zone` 里 cpu-x-y / tsens 是**结温**（junction），游戏负载下 90℃ 以上正常；
+  skin / quiet-therm 才是外壳体感温度。界面分开标注，不再混为一个"温度"。
+- **帧率来源**：优先读骁龙 DRM 的 `/sys/class/drm/sde-crtc-0/measured_fps`，纯 sysfs 读取、开销接近零；
+  没有该节点时回退到 `dumpsys SurfaceFlinger --latency`。Android 15 起 `--list` 输出被
+  `RequestedLayerState{}` 包裹，回退路径可能取不到数据，接口上会标明当前用的是哪种来源。
 
 ## 构建
 
@@ -124,8 +129,9 @@ CI 配置在 `.github/workflows/build.yml`，密钥存放在仓库 Secrets 中�
 
 - **内核节点差异**：GPU 走高通 kgsl 路径，联发科平台大概率读不到，会显示 `--`。
   thermal zone 命名各家不同，CPU 温度靠关键字匹配。
-- **帧率**：依赖 `dumpsys SurfaceFlinger --latency` 和 layer 名匹配包名。部分游戏用独立 Surface，
-  layer 名不含包名时会取不到；HUD 里会显示 `--`，界面上能看到匹配到的 layer 名以便排查。
+- **帧率**：优先 `measured_fps`（骁龙基本都有）。没有该节点时回退 `dumpsys SurfaceFlinger --latency`，
+  Android 15 之后 `--list` 格式变化可能导致回退路径拿不到帧数据。设置页有「运行帧率诊断」，
+  会打印节点、图层名和 latency 原始输出。
 - **多进程**：同 uid 进程每 2 秒刷新一次集合，应用刚启动的瞬间可能少抓一两个子进程。
 - **前台判定**：每 3 秒轮询一次 `dumpsys activity activities`，进入/退出应用的判定有最多 3 秒延迟。
 - **数据量**：线程明细每 2 秒一轮，50 线程的会话大约 9 万行/小时。长时间挂机建议调大采样间隔。

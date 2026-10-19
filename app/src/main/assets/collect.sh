@@ -316,6 +316,24 @@ emit_threads() {
   done
 }
 
+# 骁龙 DRM 驱动直接导出实测帧率，纯 sysfs 读取，比 dumpsys 低两个数量级
+emit_drm_fps() {
+  for f in \
+    /sys/class/drm/sde-crtc-0/measured_fps \
+    /sys/class/drm/card0/sde-crtc-0/measured_fps \
+    /sys/class/drm/card0/sde_crtc_fps \
+    /sys/class/graphics/fb0/measured_fps; do
+    [ -r "$f" ] || continue
+    if read -r v < "$f" 2>/dev/null; then
+      case "$v" in
+        ""|*"not available"*) continue ;;
+      esac
+      printf 'FPSD\t%s\t%s\n' "$f" "$v"
+      return 0
+    fi
+  done
+}
+
 emit_fps() {
   [ "$FPS_ENABLED" = "1" ] || return 0
   [ -n "$PKG" ] || return 0
@@ -366,6 +384,7 @@ while :; do
   emit_foreground
   emit_proc
   emit_threads
+  emit_drm_fps
   emit_fps
   printf 'E\n'
 

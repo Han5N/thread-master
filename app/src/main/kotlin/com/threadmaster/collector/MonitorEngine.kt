@@ -265,6 +265,13 @@ class MonitorEngine(
         }
     }
 
+    /** 对当前目标应用跑一次帧率诊断。 */
+    suspend fun diagnoseFps(): String {
+        val pkg = _state.value.targetPackage.ifEmpty { targetPackage }
+        if (pkg.isEmpty()) return "还没有选择目标应用，先选一个再诊断"
+        return shell.diagnoseFps(pkg)
+    }
+
     /** 会话结束后把缓冲数据落盘，Service 销毁时调用。 */
     suspend fun flush() = repository.flush()
 

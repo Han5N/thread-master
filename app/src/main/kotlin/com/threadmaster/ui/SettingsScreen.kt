@@ -4,6 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,11 +30,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.threadmaster.data.AppSettings
 import com.threadmaster.ui.components.SectionLabel
 import com.threadmaster.ui.components.SegmentedRow
 import com.threadmaster.ui.components.TmCard
 import com.threadmaster.ui.components.TmConfirmDialog
+import androidx.compose.foundation.layout.Box
+import top.yukonga.miuix.kmp.basic.Button
+import androidx.compose.foundation.layout.Box
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -38,6 +48,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 fun SettingsScreen(vm: MonitorViewModel) {
     val settings by vm.settingsState.collectAsState()
+    val diagnosis by vm.diagnosis.collectAsState()
     val context = LocalContext.current
     var confirmClear by remember { mutableStateOf(false) }
 
@@ -108,6 +119,30 @@ fun SettingsScreen(vm: MonitorViewModel) {
 
         item {
             TmCard(Modifier.fillMaxWidth()) {
+                SectionLabel("诊断")
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "帧率一直是 0 或画不出来时，跑一次诊断：会打印内核 measured_fps 节点、" +
+                        "SurfaceFlinger 里匹配到的图层名，以及 latency 的原始输出。",
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    fontSize = 11.sp,
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { vm.diagnoseFps() },
+                    cornerRadius = 12.dp,
+                    colors = ButtonDefaults.buttonColors(
+                        color = MiuixTheme.colorScheme.secondary,
+                        contentColor = MiuixTheme.colorScheme.onSecondary,
+                    ),
+                ) {
+                    Text("运行帧率诊断", fontSize = 13.sp)
+                }
+            }
+        }
+
+        item {
+            TmCard(Modifier.fillMaxWidth()) {
                 SectionLabel("悬浮窗")
                 Spacer(Modifier.height(4.dp))
                 SwitchRow(
@@ -162,7 +197,7 @@ fun SettingsScreen(vm: MonitorViewModel) {
                 SectionLabel("关于")
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Thread Master 0.2.0",
+                    "Thread Master 0.2.1",
                     color = MiuixTheme.colorScheme.onSurface,
                     fontSize = 13.sp,
                 )
@@ -180,6 +215,42 @@ fun SettingsScreen(vm: MonitorViewModel) {
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                 )
+            }
+        }
+    }
+
+    diagnosis?.let { text ->
+        Dialog(onDismissRequest = { vm.dismissDiagnosis() }) {
+            Card(Modifier.fillMaxWidth()) {
+                Text(
+                    "帧率诊断",
+                    color = MiuixTheme.colorScheme.onSurface,
+                    fontSize = 16.sp,
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = text,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { vm.dismissDiagnosis() },
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 12.dp,
+                ) {
+                    Text("关闭", fontSize = 13.sp)
+                }
             }
         }
     }

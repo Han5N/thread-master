@@ -193,7 +193,7 @@ class HudView(context: Context) : View(context) {
         // 指标网格
         y += dp * 4f
         drawMetricRow(canvas, pad, y, w,
-            "温度" to (if (snap.cpuTempC.isNaN()) "--" else String.format(Locale.US, "%.1f℃", snap.cpuTempC)),
+            "结温" to (if (snap.cpuTempC.isNaN()) "--" else String.format(Locale.US, "%.1f℃", snap.cpuTempC)),
             "帧率" to (if (snap.fps.isNaN()) "--" else String.format(Locale.US, "%.0f", snap.fps)),
             "刷新" to (if (snap.refreshHz.isNaN()) "--" else String.format(Locale.US, "%.0fHz", snap.refreshHz)),
         )

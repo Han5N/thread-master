@@ -63,6 +63,8 @@ data class SystemSnapshot(
     val fps: Float = Float.NaN,
     val renderLatencyMs: Float = Float.NaN,
     val fpsLayer: String = "",
+    /** 帧率来源：drm = 内核 measured_fps，sf = SurfaceFlinger latency。 */
+    val fpsSource: String = "",
     val refreshHz: Float = Float.NaN,
     val batteryCurrentMa: Float = Float.NaN,
     val batteryVoltageV: Float = Float.NaN,
@@ -98,16 +100,49 @@ data class SystemSnapshot(
             if (list.isEmpty()) 0 else list.sumOf { it.curKhz } / list.size / 1000
         }
 
-    /** 按线程名关键字挑出 CPU 温度，各家内核命名差异大，用关键词兜底。 */
+    /**
+     * CPU 结温（junction）。
+     *
+     * 骁龙的 cpu-x-y / tsens 节点在游戏里能到 90℃ 以上，这是芯片内部结温，
+     * 和外壳体感温度完全不是一回事，所以界面上必须标明"结温"。
+     * 取平均而不是最大值，避免某个瞬时尖峰把读数顶上去。
+     */
     val cpuTempC: Float
-        get() = temps.filter { t ->
-            val n = t.zone.lowercase()
-            n.contains("cpu") || n.contains("soc") || n.contains("cluster") ||
-                n.contains("tsens") || n.contains("apc")
-        }.maxByOrNull { it.celsius }?.celsius ?: Float.NaN
+        get() = cpuZones.map { it.celsius }.averageOrNaN()
+
+    val cpuTempMaxC: Float
+        get() = cpuZones.maxOfOrNull { it.celsius } ?: Float.NaN
+
+    /** GPU 结温。 */
+    val gpuTempFromZone: Float
+        get() = temps.filter {
+            val n = it.zone.lowercase()
+            n.contains("gpu") || n.contains("kgsl")
+        }.maxOfOrNull { it.celsius } ?: Float.NaN
+
+    /** 外壳 / 机身温度，最接近体感。 */
+    val skinTempC: Float
+        get() = temps.firstOrNull {
+            val n = it.zone.lowercase()
+            n.contains("skin") || n.contains("quiet") || n.contains("case") || n.contains("shell")
+        }?.celsius ?: Float.NaN
 
     val batteryTempFromZone: Float
         get() = temps.firstOrNull { it.zone.lowercase().contains("batt") }?.celsius ?: Float.NaN
+
+    private val cpuZones: List<TempReading>
+        get() = temps.filter { t ->
+            val n = t.zone.lowercase()
+            (n.contains("cpu") || n.contains("soc") || n.contains("cluster") ||
+                n.contains("tsens") || n.contains("apc")) &&
+                !n.contains("gpu") && !n.contains("batt")
+        }
+}
+
+/** 空列表或全为 NaN 时返回 NaN，而不是 0。 */
+fun List<Float>.averageOrNaN(): Float {
+    val valid = filter { it.isFinite() }
+    return if (valid.isEmpty()) Float.NaN else valid.average().toFloat()
 }
 
 /** 可选中的目标应用。 */

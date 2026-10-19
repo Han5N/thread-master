@@ -484,42 +484,55 @@ private fun MemoryCard(snap: SystemSnapshot?) {
 @Composable
 private fun ThermalCard(snap: SystemSnapshot?) {
     val temps = snap?.temps.orEmpty()
-    val cpu = snap?.cpuTempC ?: Float.NaN
+    val cpuAvg = snap?.cpuTempC ?: Float.NaN
+    val cpuMax = snap?.cpuTempMaxC ?: Float.NaN
+    val gpu = snap?.gpuTempFromZone ?: Float.NaN
+    val skin = snap?.skinTempC ?: Float.NaN
+    val battery = snap?.batteryTempFromZone ?: Float.NaN
     val picked = remember(temps) {
-        temps.filter {
-            val n = it.zone.lowercase()
-            n.contains("cpu") || n.contains("gpu") || n.contains("batt") ||
-                n.contains("soc") || n.contains("skin") || n.contains("disp")
-        }.distinctBy { it.zone }.sortedByDescending { it.celsius }.take(6)
+        temps.distinctBy { it.zone }.sortedByDescending { it.celsius }.take(8)
     }
-    if (picked.isEmpty() && cpu.isNaN()) return
+    if (picked.isEmpty() && cpuAvg.isNaN()) return
 
     TmCard(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SectionLabel("温度")
             Spacer(Modifier.weight(1f))
             Text(
-                "CPU ${fmt(cpu, 1)}℃",
+                "CPU 结温 ${fmt(cpuAvg, 1)}℃",
                 color = MiuixTheme.colorScheme.onSurface,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
             )
         }
-        Spacer(Modifier.height(8.dp))
-        if (picked.isEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "结温是芯片内部温度，游戏负载下 90℃ 以上属于正常范围，不等于机身温度。",
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            fontSize = 9.sp,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row {
+            TempBit("结温峰值", cpuMax, Modifier.weight(1f))
+            TempBit("外壳", skin, Modifier.weight(1f))
+            TempBit("GPU", gpu, Modifier.weight(1f))
+            TempBit("电池", battery, Modifier.weight(1f))
+        }
+        if (picked.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
             Text(
-                "没有读到可用的 thermal_zone",
+                "全部传感器",
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                fontSize = 11.sp,
+                fontSize = 9.sp,
             )
-        } else {
+            Spacer(Modifier.height(4.dp))
             for (t in picked) {
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    Modifier.fillMaxWidth().padding(vertical = 1.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = t.zone.take(18),
+                        text = t.zone.take(20),
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         fontSize = 10.sp,
                         modifier = Modifier.weight(1f),
@@ -534,6 +547,20 @@ private fun ThermalCard(snap: SystemSnapshot?) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TempBit(label: String, value: Float, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 9.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = if (value.isFinite()) fmt(value, 1) + "℃" else "--",
+            color = MiuixTheme.colorScheme.onSurface,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.Monospace,
+        )
     }
 }
 
@@ -635,7 +662,11 @@ private fun FpsCard(snap: SystemSnapshot?) {
             SectionLabel("帧率与呈现")
             Spacer(Modifier.weight(1f))
             Text(
-                text = if (layer.isEmpty()) "未匹配图层" else layer.take(22),
+                text = when (snap?.fpsSource) {
+                    "drm" -> "内核 measured_fps"
+                    "sf" -> "SurfaceFlinger"
+                    else -> if (layer.isEmpty()) "未匹配图层" else layer.take(22)
+                },
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 fontSize = 9.sp,
                 fontFamily = FontFamily.Monospace,
@@ -666,11 +697,12 @@ private fun FpsCard(snap: SystemSnapshot?) {
         if (fps.isNaN() || fps == 0f) {
             Spacer(Modifier.height(8.dp))
             Text(
-                text = if (layer.isEmpty()) {
-                    "没有找到包含包名的 SurfaceFlinger 图层。游戏用独立 Surface 时 layer 名可能不含包名，" +
-                        "可以在设置里关闭帧率采样以减少开销。"
-                } else {
-                    "已定位到图层，但最近没有新帧。应用在静止画面或暂停时会显示 0。"
+                text = when {
+                    snap?.fpsSource == "drm" -> ""
+                    layer.isEmpty() ->
+                        "既没有内核 measured_fps 节点，也没有匹配到 SurfaceFlinger 图层。" +
+                            "可以去设置里跑一次帧率诊断看具体输出。"
+                    else -> "已定位到图层，但最近没有新帧。应用在静止画面或暂停时会显示 0。"
                 },
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 fontSize = 10.sp,
