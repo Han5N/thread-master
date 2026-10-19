@@ -17,15 +17,13 @@ UID_STR=""
 PIDS=""
 PID=""
 LAYER=""
+FG_STATE=0
 TICK=0
 MINMAX_READY=0
+GI_READY=0
 
 echo $$ > "$PIDFILE"
 
-# 读取配置。文件形如：
-#   PKG=com.example.game
-#   INTERVAL=0.5
-#   FPS=1
 load_cfg() {
   [ -r "$CFG" ] || return 0
   while IFS='=' read -r k v; do
@@ -38,11 +36,16 @@ load_cfg() {
   [ -n "$INTERVAL" ] || INTERVAL=0.5
 }
 
-# 解析目标进程。
-#
-# 先取 pidof 的主进程，再用它的 uid 把所有同 uid 进程一并纳入：
-# 现代游戏常见「主进程 + 渲染/资源子进程」的结构，只看主进程会漏掉一半线程。
-# 同 uid 进程集合变化很慢，每 4 个 tick（约 2 秒）刷新一次就够。
+add_pid() {
+  [ -n "$1" ] || return 0
+  case " $PIDS " in
+    *" $1 "*) return 0 ;;
+  esac
+  PIDS="$PIDS $1"
+}
+
+# 先取 pidof 的主进程，再用它的 uid 把所有同 uid 进程纳入。
+# 现代游戏常见「主进程 + 渲染/资源子进程」，只看主进程会漏掉一半线程。
 resolve_pids() {
   MAIN=""
   for p in $(pidof "$PKG" 2>/dev/null); do
@@ -80,14 +83,6 @@ resolve_pids() {
   PID=${1:-0}
 }
 
-add_pid() {
-  [ -n "$1" ] || return 0
-  case " $PIDS " in
-    *" $1 "*) return 0 ;;
-  esac
-  PIDS="$PIDS $1"
-}
-
 emit_cpu() {
   while read -r name u n s i w irq sirq st rest; do
     case "$name" in
@@ -95,6 +90,26 @@ emit_cpu() {
       *) break ;;
     esac
   done < /proc/stat
+}
+
+# ctxt / intr / 运行队列都藏 /proc/stat 后半段，一轮读完不额外 fork
+emit_kernel_counters() {
+  while read -r key v rest; do
+    case "$key" in
+      ctxt) CTXT=$v ;;
+      intr) INTR=$v ;;
+      procs_running) RUNQ=$v ;;
+      procs_blocked) BLKQ=$v ;;
+      btime) break ;;
+    esac
+  done < /proc/stat
+  printf 'CT\t%s\t%s\t%s\t%s\n' "${CTXT:-0}" "${INTR:-0}" "${RUNQ:-0}" "${BLKQ:-0}"
+}
+
+emit_load() {
+  if read -r l1 l5 l15 rest < /proc/loadavg; then
+    printf 'LD\t%s\t%s\t%s\n' "$l1" "$l5" "$l15"
+  fi
 }
 
 emit_freq() {
@@ -133,6 +148,7 @@ emit_mem() {
   done < /proc/meminfo
 }
 
+# 骁龙 GPU：不同平台节点位置不同，逐级尝试
 emit_gpu() {
   gcur=0
   gbusy1=0
@@ -152,6 +168,25 @@ emit_gpu() {
   printf 'G\t%s\t%s\t%s\t%s\n' "$gcur" "$gbusy1" "$gbusy2" "$gtemp"
 }
 
+# GPU 型号与频点不常变，每 20 轮读一次
+emit_gpu_info() {
+  [ "$GI_READY" = "1" ] && return 0
+  model=""
+  maxkhz=0
+  freqs=""
+  if read -r model < /sys/class/kgsl/kgsl-3d0/gpu_model 2>/dev/null; then :; fi
+  if [ -z "$model" ]; then
+    if read -r model < /sys/class/kgsl/kgsl-3d0/devfreq/device/of_node/compatible 2>/dev/null; then :; fi
+  fi
+  if read -r maxkhz < /sys/class/kgsl/kgsl-3d0/max_gpuclk 2>/dev/null; then :; fi
+  if [ -z "$maxkhz" ] || [ "$maxkhz" = "0" ]; then
+    if read -r maxkhz < /sys/class/kgsl/kgsl-3d0/devfreq/max_freq 2>/dev/null; then :; fi
+  fi
+  if read -r freqs < /sys/class/kgsl/kgsl-3d0/gpu_available_frequencies 2>/dev/null; then :; fi
+  printf 'GI\t%s\t%s\t%s\n' "$model" "${maxkhz:-0}" "$freqs"
+  GI_READY=1
+}
+
 emit_battery() {
   for base in /sys/class/power_supply/battery /sys/class/power_supply/bms; do
     [ -d "$base" ] || continue
@@ -159,11 +194,16 @@ emit_battery() {
     vol=""
     lvl=""
     tmp=""
+    pwr=""
+    st=""
     [ -r "$base/current_now" ] && read -r cur < "$base/current_now"
     [ -r "$base/voltage_now" ] && read -r vol < "$base/voltage_now"
     [ -r "$base/capacity" ] && read -r lvl < "$base/capacity"
     [ -r "$base/temp" ] && read -r tmp < "$base/temp"
+    [ -r "$base/power_now" ] && read -r pwr < "$base/power_now"
+    [ -r "$base/status" ] && read -r st < "$base/status"
     printf 'BAT\t%s\t%s\t%s\t%s\n' "$cur" "$vol" "$lvl" "$tmp"
+    printf 'BP\t%s\t%s\n' "$pwr" "$st"
     break
   done
 }
@@ -199,6 +239,32 @@ emit_temp() {
   done
 }
 
+emit_zram() {
+  used=0
+  total=0
+  if [ -r /sys/block/zram0/mm_stat ]; then
+    read -r used rest < /sys/block/zram0/mm_stat 2>/dev/null
+  fi
+  if [ -r /sys/block/zram0/disksize ]; then
+    read -r total < /sys/block/zram0/disksize 2>/dev/null
+  fi
+  printf 'ZR\t%s\t%s\n' "$((used / 1024))" "$((total / 1024))"
+}
+
+# 前台判断：只关心当前 resumed 的 Activity 是不是目标应用。
+# grep -m1 会提前退出，dumpsys 收到 SIGPIPE 停止输出，开销比整份 dump 小很多。
+emit_foreground() {
+  [ -n "$PKG" ] || { printf 'FG\t0\n'; return 0; }
+  if [ $((TICK % 6)) -eq 0 ] || [ "$TICK" -lt 6 ]; then
+    LINE=$(dumpsys activity activities 2>/dev/null | grep -m1 -E "topResumedActivity|mResumedActivity")
+    case "$LINE" in
+      *"$PKG/"*) FG_STATE=1 ;;
+      *) FG_STATE=0 ;;
+    esac
+  fi
+  printf 'FG\t%s\n' "$FG_STATE"
+}
+
 emit_proc() {
   for p in $PIDS; do
     [ -r "/proc/$p/stat" ] || continue
@@ -215,7 +281,17 @@ emit_proc() {
         VmRSS:) rss="$v"; break ;;
       esac
     done < "/proc/$p/status"
-    printf 'P\t%s\t%s\t%s\t%s\t%s\n' "$p" "$utime" "$stime" "$rss" "$nrthr"
+    pior=0
+    piow=0
+    if [ -r "/proc/$p/io" ]; then
+      while read -r k v; do
+        case "$k" in
+          read_bytes:) pior="$v" ;;
+          write_bytes:) piow="$v" ;;
+        esac
+      done < "/proc/$p/io"
+    fi
+    printf 'P\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$p" "$utime" "$stime" "$rss" "$nrthr" "$pior" "$piow"
   done
 }
 
@@ -243,8 +319,13 @@ emit_threads() {
 emit_fps() {
   [ "$FPS_ENABLED" = "1" ] || return 0
   [ -n "$PKG" ] || return 0
-  if [ $((TICK % 8)) -eq 0 ]; then
-    LAYER=$(dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "$PKG" | tail -n 1)
+  if [ -z "$LAYER" ] || [ $((TICK % 20)) -eq 0 ]; then
+    LIST=$(dumpsys SurfaceFlinger --list 2>/dev/null | grep -F "$PKG")
+    LAYER=$(printf '%s\n' "$LIST" | grep -E "SurfaceView|BLAST" | tail -n 1)
+    if [ -z "$LAYER" ]; then
+      LAYER=$(printf '%s\n' "$LIST" | tail -n 1)
+    fi
+    printf 'FPSL\t%s\n' "$LAYER"
   fi
   if [ -n "$LAYER" ] && [ $((TICK % 4)) -eq 0 ]; then
     printf 'FPSB\n'
@@ -262,20 +343,27 @@ while :; do
   if [ $((TICK % 4)) -eq 0 ] || [ -z "$PIDS" ]; then
     resolve_pids
   fi
+  if [ $((TICK % 20)) -eq 0 ]; then
+    GI_READY=0
+  fi
 
   printf 'B\n'
-
   emit_cpu
+  emit_kernel_counters
+  emit_load
   emit_freq
   if [ "$MINMAX_READY" = "0" ]; then
     emit_freq_limits
     MINMAX_READY=1
   fi
   emit_mem
+  emit_zram
   emit_gpu
+  emit_gpu_info
   emit_battery
   emit_net
   emit_temp
+  emit_foreground
   emit_proc
   emit_threads
   emit_fps

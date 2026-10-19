@@ -98,6 +98,10 @@ class MonitorViewModel(application: Application) : AndroidViewModel(application)
     fun setInterval(ms: Long) = settings.setInterval(ms)
     fun setFpsEnabled(enabled: Boolean) = settings.setFpsEnabled(enabled)
     fun setRecordThreads(enabled: Boolean) = settings.setRecordThreads(enabled)
+
+    fun setForegroundOnly(enabled: Boolean) = settings.setForegroundOnly(enabled)
+
+    fun setThemeMode(mode: Int) = settings.setThemeMode(mode)
     fun setHudEnabled(enabled: Boolean) = settings.setHudEnabled(enabled)
 
     fun loadSessionDetail(sessionId: Long, metric: DetailMetric) {

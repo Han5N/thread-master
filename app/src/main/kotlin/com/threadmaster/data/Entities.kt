@@ -59,6 +59,15 @@ data class SysSampleEntity(
     val targetCpu: Float,
     val targetRssMb: Int,
     val threadCount: Int,
+    val gpuModel: String = "",
+    val gpuMaxMhz: Int = 0,
+    val refreshHz: Float = -1f,
+    val load1: Float = -1f,
+    val zramUsedMb: Int = 0,
+    val batteryPowerMw: Float = -1f,
+    val ctxtPerSec: Int = 0,
+    val targetIoReadKb: Int = 0,
+    val targetIoWriteKb: Int = 0,
 )
 
 /** 线程级采样行。写入频率低于系统采样，避免高频小事务拖慢记录。 */

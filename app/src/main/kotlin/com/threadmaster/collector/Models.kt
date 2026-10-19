@@ -52,21 +52,40 @@ data class SystemSnapshot(
     val memAvailableKb: Long = 0,
     val swapTotalKb: Long = 0,
     val swapFreeKb: Long = 0,
+    val zramUsedKb: Long = 0,
+    val zramTotalKb: Long = 0,
     val gpuFreqKhz: Int = 0,
+    val gpuMaxKhz: Int = 0,
+    val gpuModel: String = "",
+    val gpuFreqList: List<Int> = emptyList(),
     val gpuBusyPercent: Float = Float.NaN,
     val gpuTempC: Float = Float.NaN,
     val fps: Float = Float.NaN,
+    val fpsLayer: String = "",
+    val refreshHz: Float = Float.NaN,
     val batteryCurrentMa: Float = Float.NaN,
     val batteryVoltageV: Float = Float.NaN,
+    val batteryPowerMw: Float = Float.NaN,
     val batteryTempC: Float = Float.NaN,
     val batteryLevel: Int = -1,
+    val batteryStatus: String = "",
     val netRxBytesPerSec: Long = 0,
     val netTxBytesPerSec: Long = 0,
+    val load1: Float = Float.NaN,
+    val load5: Float = Float.NaN,
+    val load15: Float = Float.NaN,
+    val runQueue: Int = 0,
+    val blockedQueue: Int = 0,
+    val ctxtPerSec: Int = 0,
+    val intrPerSec: Int = 0,
     val temps: List<TempReading> = emptyList(),
+    val foreground: Boolean = false,
     val targetPid: Int = 0,
     val targetCpuPercent: Float = Float.NaN,
     val targetRssKb: Long = 0,
     val targetThreadCount: Int = 0,
+    val targetIoReadPerSec: Long = 0,
+    val targetIoWritePerSec: Long = 0,
     val threads: List<ThreadSample> = emptyList(),
 ) {
     val memUsedKb: Long get() = (memTotalKb - memAvailableKb).coerceAtLeast(0)
@@ -100,6 +119,17 @@ data class TargetApp(
 )
 
 /** 采集会话的运行态，供界面顶栏展示。 */
+enum class MonitorPhase {
+    /** 未启动。 */
+    IDLE,
+
+    /** 已拿到 root 并开始采样，但目标应用还没到前台，数据不入库。 */
+    WAITING,
+
+    /** 目标应用在前台，正在记录。 */
+    RECORDING,
+}
+
 data class MonitorState(
     val running: Boolean = false,
     val rootGranted: Boolean = false,
@@ -108,5 +138,7 @@ data class MonitorState(
     val targetPid: Int = 0,
     val sessionId: Long = 0,
     val startedAt: Long = 0,
+    val phase: MonitorPhase = MonitorPhase.IDLE,
+    val foreground: Boolean = false,
     val error: String? = null,
 )

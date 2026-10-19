@@ -76,6 +76,15 @@ class SessionRepository(private val db: AppDatabase) {
                 targetCpu = safe(snapshot.targetCpuPercent),
                 targetRssMb = (snapshot.targetRssKb / 1024).toInt(),
                 threadCount = snapshot.targetThreadCount,
+                gpuModel = snapshot.gpuModel,
+                gpuMaxMhz = snapshot.gpuMaxKhz / 1000,
+                refreshHz = safe(snapshot.refreshHz),
+                load1 = safe(snapshot.load1),
+                zramUsedMb = (snapshot.zramUsedKb / 1024).toInt(),
+                batteryPowerMw = safe(snapshot.batteryPowerMw),
+                ctxtPerSec = snapshot.ctxtPerSec,
+                targetIoReadKb = (snapshot.targetIoReadPerSec / 1024).toInt(),
+                targetIoWriteKb = (snapshot.targetIoWritePerSec / 1024).toInt(),
             )
         )
 

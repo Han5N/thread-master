@@ -23,13 +23,20 @@ class SampleParser {
     private var prevCpu = HashMap<String, LongArray>()
     private var prevNetRx = 0L
     private var prevNetTx = 0L
+    private var prevCtxt = 0L
+    private var prevIntr = 0L
     private var prevGpuBusy = 0L
     private var prevGpuTotal = 0L
     private var prevBlockNs = 0L
+    private var prevTargetIoRead = 0L
+    private var prevTargetIoWrite = 0L
     private val prevThreads = HashMap<Int, ThreadCounters>()
 
     /** 当前帧解析出的帧率缓存，脚本每 2 秒才更新一次。 */
     private var lastFps = Float.NaN
+
+    /** 屏幕刷新率，从 latency 输出的首行刷新周期换算，同样低频更新。 */
+    private var lastRefreshHz = Float.NaN
 
     /**
      * 喂入一行输出。
@@ -56,8 +63,9 @@ class SampleParser {
             }
             line == "FPSE" -> {
                 inFps = false
-                val fps = parseFps(fpsLines, nowNs)
+                val (fps, refresh) = parseFps(fpsLines, nowNs)
                 if (!fps.isNaN()) lastFps = fps
+                if (!refresh.isNaN()) lastRefreshHz = refresh
                 return null
             }
             inFps -> {
@@ -75,10 +83,15 @@ class SampleParser {
         prevThreads.clear()
         prevNetRx = 0
         prevNetTx = 0
+        prevCtxt = 0
+        prevIntr = 0
         prevGpuBusy = 0
         prevGpuTotal = 0
         prevBlockNs = 0
+        prevTargetIoRead = 0
+        prevTargetIoWrite = 0
         lastFps = Float.NaN
+        lastRefreshHz = Float.NaN
     }
 
     private fun parseLine(line: String) {
@@ -165,6 +178,8 @@ class SampleParser {
                     raw.pStime += f[2].toLongOrNull() ?: 0L
                     raw.pRssKb += f[3].toLongOrNull() ?: 0L
                     raw.pThreads += f[4].toIntOrNull() ?: 0
+                    raw.targetIoRead += f.getOrNull(5)?.toLongOrNull() ?: 0L
+                    raw.targetIoWrite += f.getOrNull(6)?.toLongOrNull() ?: 0L
                 }
             }
             "THR" -> {
@@ -187,6 +202,50 @@ class SampleParser {
                     )
                 }
             }
+            "CT" -> {
+                val f = body.split('\t')
+                if (f.size >= 4) {
+                    raw.ctxt = f[0].toLongOrNull() ?: 0L
+                    raw.intr = f[1].toLongOrNull() ?: 0L
+                    raw.runQueue = f[2].toIntOrNull() ?: 0
+                    raw.blockedQueue = f[3].toIntOrNull() ?: 0
+                }
+            }
+            "LD" -> {
+                val f = body.split('\t')
+                if (f.size >= 3) {
+                    raw.load1 = f[0].toFloatOrNull() ?: Float.NaN
+                    raw.load5 = f[1].toFloatOrNull() ?: Float.NaN
+                    raw.load15 = f[2].toFloatOrNull() ?: Float.NaN
+                }
+            }
+            "ZR" -> {
+                val f = body.split('\t')
+                if (f.size >= 2) {
+                    raw.zramUsedKb = f[0].toLongOrNull() ?: 0L
+                    raw.zramTotalKb = f[1].toLongOrNull() ?: 0L
+                }
+            }
+            "BP" -> {
+                val f = body.split('\t')
+                if (f.size >= 2) {
+                    val uw = f[0].toFloatOrNull()
+                    raw.batteryPowerMw = if (uw != null && uw != 0f) uw / 1000f else Float.NaN
+                    raw.batteryStatus = f[1]
+                }
+            }
+            "GI" -> {
+                val f = body.split('\t')
+                if (f.size >= 3) {
+                    raw.gpuModel = f[0].trim()
+                    raw.gpuMaxKhz = f[1].toIntOrNull() ?: 0
+                    raw.gpuFreqList = f[2].split(' ')
+                        .mapNotNull { it.trim().toIntOrNull() }
+                        .filter { it > 0 }
+                }
+            }
+            "FG" -> raw.foreground = body.trim() == "1"
+            "FPSL" -> raw.fpsLayer = body.trim()
         }
     }
 
@@ -233,6 +292,24 @@ class SampleParser {
         } else 0L
         prevNetRx = raw.netRx
         prevNetTx = raw.netTx
+
+        val ctxtPerSec = if (dtNs > 0 && prevCtxt > 0 && raw.ctxt >= prevCtxt) {
+            ((raw.ctxt - prevCtxt) / dtSec).toInt()
+        } else 0
+        val intrPerSec = if (dtNs > 0 && prevIntr > 0 && raw.intr >= prevIntr) {
+            ((raw.intr - prevIntr) / dtSec).toInt()
+        } else 0
+        prevCtxt = raw.ctxt
+        prevIntr = raw.intr
+
+        val targetIoRead = if (dtNs > 0 && prevTargetIoRead > 0 && raw.targetIoRead >= prevTargetIoRead) {
+            ((raw.targetIoRead - prevTargetIoRead) / dtSec).toLong()
+        } else 0L
+        val targetIoWrite = if (dtNs > 0 && prevTargetIoWrite > 0 && raw.targetIoWrite >= prevTargetIoWrite) {
+            ((raw.targetIoWrite - prevTargetIoWrite) / dtSec).toLong()
+        } else 0L
+        prevTargetIoRead = raw.targetIoRead
+        prevTargetIoWrite = raw.targetIoWrite
 
         var gpuBusyPct = Float.NaN
         if (dtNs > 0 && prevGpuTotal > 0 && raw.gpuTotal > prevGpuTotal) {
@@ -308,17 +385,43 @@ class SampleParser {
             batteryLevel = raw.batLevel,
             netRxBytesPerSec = netRx,
             netTxBytesPerSec = netTx,
+            load1 = raw.load1,
+            load5 = raw.load5,
+            load15 = raw.load15,
+            runQueue = raw.runQueue,
+            blockedQueue = raw.blockedQueue,
+            ctxtPerSec = ctxtPerSec,
+            intrPerSec = intrPerSec,
+            zramUsedKb = raw.zramUsedKb,
+            zramTotalKb = raw.zramTotalKb,
+            gpuModel = raw.gpuModel,
+            gpuMaxKhz = raw.gpuMaxKhz,
+            gpuFreqList = raw.gpuFreqList,
+            refreshHz = lastRefreshHz,
+            batteryPowerMw = raw.batteryPowerMw,
+            batteryStatus = raw.batteryStatus,
             temps = raw.temps,
+            foreground = raw.foreground,
+            fpsLayer = raw.fpsLayer,
             targetPid = raw.pid,
             targetCpuPercent = if (threadSamples.isEmpty()) Float.NaN else targetCpu,
             targetRssKb = raw.pRssKb,
             targetThreadCount = maxOf(raw.pThreads, raw.threads.size),
+            targetIoReadPerSec = targetIoRead,
+            targetIoWritePerSec = targetIoWrite,
             threads = threadSamples,
         )
     }
 
-    private fun parseFps(lines: List<String>, nowNs: Long): Float {
-        if (lines.size < 4) return Float.NaN
+    private fun parseFps(lines: List<String>, nowNs: Long): Pair<Float, Float> {
+        val refreshNs = lines.firstOrNull()?.trim()?.toLongOrNull()
+        val refreshHz = if (refreshNs != null && refreshNs > 0) {
+            1_000_000_000f / refreshNs
+        } else {
+            Float.NaN
+        }
+        if (lines.size < 4) return Float.NaN to refreshHz
+
         val times = ArrayList<Long>(lines.size)
         for (i in 1 until lines.size) {
             // dumpsys 用空格对齐，列之间可能有多个空格，不能用单空格切分
@@ -327,14 +430,14 @@ class SampleParser {
             val actual = parts[1].toLongOrNull() ?: continue
             if (actual > 0) times.add(actual)
         }
-        if (times.size < 2) return Float.NaN
+        if (times.size < 2) return Float.NaN to refreshHz
         times.sort()
         val last = times.last()
         // latency 缓冲里可能全是暂停前的旧帧，超过 1 秒没有新帧就当作 0 fps，而不是虚报历史帧率
-        if (nowNs - last > 1_000_000_000L) return 0f
+        if (nowNs > last && nowNs - last > 1_000_000_000L) return 0f to refreshHz
         val span = last - times.first()
-        if (span <= 0) return Float.NaN
-        return ((times.size - 1) * 1_000_000_000f / span).coerceIn(0f, 240f)
+        if (span <= 0) return Float.NaN to refreshHz
+        return ((times.size - 1) * 1_000_000_000f / span).coerceIn(0f, 240f) to refreshHz
     }
 
     private class RawBlock {
@@ -355,6 +458,24 @@ class SampleParser {
         var batTemp = Float.NaN
         var netRx = 0L
         var netTx = 0L
+        var ctxt = 0L
+        var intr = 0L
+        var runQueue = 0
+        var blockedQueue = 0
+        var load1 = Float.NaN
+        var load5 = Float.NaN
+        var load15 = Float.NaN
+        var zramUsedKb = 0L
+        var zramTotalKb = 0L
+        var gpuModel = ""
+        var gpuMaxKhz = 0
+        var gpuFreqList: List<Int> = emptyList()
+        var batteryPowerMw = Float.NaN
+        var batteryStatus = ""
+        var foreground = false
+        var fpsLayer = ""
+        var targetIoRead = 0L
+        var targetIoWrite = 0L
         val temps = ArrayList<TempReading>(24)
         var pid = 0
         var pUtime = 0L

@@ -9,7 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,12 +18,6 @@ import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,9 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.threadmaster.data.AppSettings
 import com.threadmaster.ui.AppPickerDialog
 import com.threadmaster.ui.DashboardScreen
 import com.threadmaster.ui.HistoryScreen
@@ -45,8 +39,11 @@ import com.threadmaster.ui.SessionDetailScreen
 import com.threadmaster.ui.SettingsScreen
 import com.threadmaster.ui.ThreadsScreen
 import com.threadmaster.ui.theme.ThreadMasterTheme
-import com.threadmaster.ui.theme.TmColors
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -58,13 +55,18 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission()
         lifecycleScope.launch { vm.engine.ensureRoot() }
         setContent {
-            ThreadMasterTheme {
+            val settings by vm.settingsState.collectAsState()
+            val dark = when (settings.themeMode) {
+                AppSettings.THEME_LIGHT -> false
+                AppSettings.THEME_DARK -> true
+                else -> isSystemInDarkTheme()
+            }
+            ThreadMasterTheme(dark = dark) {
                 AppRoot(vm)
             }
         }
     }
 
-    /** Android 13 起前台服务的通知也要运行时授权，没授权只是不显示通知，服务本身不受影响。 */
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val granted = ContextCompat.checkSelfPermission(
@@ -100,37 +102,30 @@ private fun AppRoot(vm: MonitorViewModel) {
 
     detailSessionId?.let { id ->
         BackHandler { detailSessionId = null }
-        SessionDetailScreen(vm = vm, sessionId = id, onBack = { detailSessionId = null })
+        Scaffold(containerColor = MiuixTheme.colorScheme.background) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                SessionDetailScreen(vm = vm, sessionId = id, onBack = { detailSessionId = null })
+            }
+        }
         return
     }
 
     Scaffold(
-        containerColor = TmColors.Bg,
+        containerColor = MiuixTheme.colorScheme.background,
         bottomBar = {
-            NavigationBar(containerColor = TmColors.Surface, tonalElevation = 0.dp) {
+            NavigationBar {
                 tabs.forEachIndexed { index, item ->
                     NavigationBarItem(
                         selected = tab == index,
                         onClick = { tab = index },
-                        icon = { Icon(item.icon, contentDescription = item.label) },
-                        label = { Text(item.label, fontSize = 10.sp) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TmColors.Primary,
-                            selectedTextColor = TmColors.Primary,
-                            unselectedIconColor = TmColors.TextDim,
-                            unselectedTextColor = TmColors.TextDim,
-                            indicatorColor = TmColors.Primary.copy(alpha = 0.10f),
-                        ),
+                        icon = item.icon,
+                        label = item.label,
                     )
                 }
             }
         },
     ) { padding ->
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        Box(Modifier.fillMaxSize().padding(padding)) {
             when (tab) {
                 0 -> DashboardScreen(vm = vm, onPickApp = { showPicker = true })
                 1 -> ThreadsScreen(vm = vm)

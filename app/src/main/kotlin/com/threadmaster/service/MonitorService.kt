@@ -77,6 +77,7 @@ class MonitorService : LifecycleService() {
                         intervalMs = settings.intervalMs,
                         fpsEnabled = settings.fpsEnabled,
                         recordThreads = settings.recordThreads,
+                        foregroundOnly = settings.foregroundOnly,
                     )
                     if (!started) {
                         val err = app.engine.state.value.error ?: "启动失败"

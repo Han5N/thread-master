@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-import com.threadmaster.ui.theme.TmColors
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** 图表里的一条曲线。values 按时间先后排列，长度可以与其它序列不同。 */
 data class ChartSeries(
@@ -38,6 +38,7 @@ fun MultiLineChart(
     showGrid: Boolean = true,
     showFill: Boolean = true,
 ) {
+    val gridColor = MiuixTheme.colorScheme.outline.copy(alpha = 0.65f)
     Box(modifier) {
         Canvas(Modifier.fillMaxSize()) {
             val bottom = size.height
@@ -49,7 +50,7 @@ fun MultiLineChart(
                 for (i in 0..3) {
                     val y = top + (bottom - top) * i / 3f
                     drawLine(
-                        color = TmColors.Stroke.copy(alpha = 0.55f),
+                        color = gridColor,
                         start = Offset(left, y),
                         end = Offset(right, y),
                         strokeWidth = 1f,

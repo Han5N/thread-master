@@ -33,7 +33,11 @@ data class LivePoint(
 /**
  * 采集引擎：管理 root 会话的生命周期、解析数据流、分发给 UI 与数据库。
  *
- * 全局单例，因为前台服务、界面、悬浮窗看到必须是同一份数据。
+ * 会话分成两个阶段：
+ * - WAITING：root 与脚本都已就绪，但目标应用还没到前台，只刷新实时预览，**不写库**；
+ * - RECORDING：目标应用在前台，开始落库。切回后台时暂停写入，回来继续。
+ *
+ * 这样记录下来的曲线只覆盖"应用真正在屏幕上跑"的时间，不会混进桌面待机的空数据。
  */
 class MonitorEngine(
     private val appContext: Context,
@@ -48,6 +52,10 @@ class MonitorEngine(
     private var session: RootShell.MonitorSession? = null
     private var sessionId: Long = 0L
     private var recordThreads = true
+    private var foregroundOnly = true
+    private var targetPackage = ""
+    private var targetLabel = ""
+    private var intervalMs = 500L
     private var watchdog: Job? = null
 
     private val _state = MutableStateFlow(MonitorState())
@@ -61,24 +69,25 @@ class MonitorEngine(
 
     private val liveBuffer = ArrayDeque<LivePoint>(LIVE_CAPACITY)
 
-    /**
-     * 启动一次新的记录会话。已存在会话时会先正常收尾。
-     *
-     * @return 是否成功进入运行态，失败原因写入 [state]。
-     */
     suspend fun start(
         packageName: String,
         label: String,
         intervalMs: Long,
         fpsEnabled: Boolean,
         recordThreads: Boolean,
+        foregroundOnly: Boolean = true,
     ): Boolean = mutex.withLock {
         if (job != null) stopInternal()
 
-        _state.value = MonitorState(rootGranted = false, targetPackage = packageName, targetLabel = label)
+        _state.value = MonitorState(
+            targetPackage = packageName,
+            targetLabel = label,
+            phase = MonitorPhase.WAITING,
+        )
         _snapshot.value = null
         liveBuffer.clear()
         _live.value = emptyList()
+        sessionId = 0
 
         if (!shell.checkRoot()) {
             _state.value = MonitorState(
@@ -107,9 +116,11 @@ class MonitorEngine(
             return@withLock false
         }
 
-        val id = repository.createSession(packageName, label, intervalMs)
-        sessionId = id
+        this.targetPackage = packageName
+        this.targetLabel = label
+        this.intervalMs = intervalMs
         this.recordThreads = recordThreads
+        this.foregroundOnly = foregroundOnly
 
         val monitor = shell.launch()
         session = monitor
@@ -119,17 +130,17 @@ class MonitorEngine(
             rootGranted = true,
             targetPackage = packageName,
             targetLabel = label,
-            sessionId = id,
-            startedAt = System.currentTimeMillis(),
+            phase = MonitorPhase.WAITING,
         )
 
         job = scope.launch { readLoop(monitor) }
         watchdog = scope.launch {
-            delay(4000)
+            delay(5000)
             if (job?.isActive == true && _snapshot.value == null) {
                 mutex.withLock {
                     _state.value = _state.value.copy(
                         running = false,
+                        phase = MonitorPhase.IDLE,
                         error = "采集会话没有输出，可能是 su 授权被拒绝或脚本被系统拦截",
                     )
                     stopInternal()
@@ -142,6 +153,14 @@ class MonitorEngine(
     suspend fun stop() = mutex.withLock { stopInternal() }
 
     /**
+     * 供 Service.onDestroy 这类不能挂起等待的入口调用。
+     * 直接启动一个内部协程收尾，避免在销毁路径上阻塞主线程。
+     */
+    fun stopAsync() {
+        scope.launch { mutex.withLock { stopInternal() } }
+    }
+
+    /**
      * 打开界面时提前请求一次 root，让授权弹窗出现在用户看得见的时候，
      * 而不是点下「开始记录」后服务在后台干等。
      */
@@ -149,14 +168,6 @@ class MonitorEngine(
         val ok = shell.checkRoot()
         _state.value = _state.value.copy(rootGranted = ok)
         return ok
-    }
-
-    /**
-     * 供 Service.onDestroy 这类不能挂起等待的入口调用。
-     * 直接启动一个内部协程收尾，避免在销毁路径上阻塞主线程。
-     */
-    fun stopAsync() {
-        scope.launch { mutex.withLock { stopInternal() } }
     }
 
     private suspend fun stopInternal() {
@@ -176,7 +187,7 @@ class MonitorEngine(
             sessionId = 0L
         }
 
-        _state.value = _state.value.copy(running = false)
+        _state.value = _state.value.copy(running = false, phase = MonitorPhase.IDLE, foreground = false)
     }
 
     private suspend fun readLoop(monitor: RootShell.MonitorSession) {
@@ -187,17 +198,47 @@ class MonitorEngine(
             val snap = parser.feed(line, System.nanoTime()) ?: continue
             _snapshot.value = snap
             pushLive(snap)
+
             if (snap.targetPid != lastPid) {
                 lastPid = snap.targetPid
                 _state.value = _state.value.copy(targetPid = snap.targetPid)
             }
-            repository.append(sessionId, snap, recordThreads)
+            if (_state.value.foreground != snap.foreground) {
+                _state.value = _state.value.copy(foreground = snap.foreground)
+            }
+
+            when (_state.value.phase) {
+                MonitorPhase.WAITING -> {
+                    // 应用进程存在且已经在前台，才真正开始一次记录
+                    if (snap.targetPid != 0 && (snap.foreground || !foregroundOnly)) {
+                        val id = repository.createSession(targetPackage, targetLabel, intervalMs)
+                        sessionId = id
+                        _state.value = _state.value.copy(
+                            phase = MonitorPhase.RECORDING,
+                            sessionId = id,
+                            startedAt = System.currentTimeMillis(),
+                        )
+                        repository.append(id, snap, recordThreads)
+                    }
+                }
+                MonitorPhase.RECORDING -> {
+                    // 切后台时暂停写入，回来接着记
+                    if ((snap.foreground || !foregroundOnly) && sessionId != 0L) {
+                        repository.append(sessionId, snap, recordThreads)
+                    }
+                }
+                MonitorPhase.IDLE -> Unit
+            }
         }
-        // 流意外结束时不要装作还在跑
+
+        if (sessionId != 0L) {
+            runCatching { repository.finishSession(sessionId) }
+            sessionId = 0
+        }
         if (_state.value.running) {
-            runCatching { repository.flush() }
             _state.value = _state.value.copy(
                 running = false,
+                phase = MonitorPhase.IDLE,
                 error = "采集会话已结束，可能是目标进程被杀或 root 会话被回收",
             )
         }
