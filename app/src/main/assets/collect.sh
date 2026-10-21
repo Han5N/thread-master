@@ -23,6 +23,9 @@ MINMAX_READY=0
 GI_READY=0
 HAS_TIMEOUT=0
 command -v timeout >/dev/null 2>&1 && HAS_TIMEOUT=1
+FPSFILE=/data/local/tmp/threadmaster_fps
+FPS_PID=""
+
 
 echo $$ > "$PIDFILE"
 
@@ -323,27 +326,43 @@ emit_threads() {
 }
 
 # 骁龙 DRM 驱动直接导出实测帧率，纯 sysfs 读取，比 dumpsys 低两个数量级
+# measured_fps 的读取放在独立子进程里。
+#
+# 某些机型在显示管线繁忙时读这个节点会进入不可中断睡眠（D 状态），
+# 连 SIGKILL 都不生效，timeout 也救不回来。主循环一旦卡在这里，
+# 块结束标记 E 就永远发不出去，采集看起来就像"没有输出"。
+# 所以主循环只读缓存文件，最坏情况也只是帧率不更新，不会拖垮整条链路。
+fps_worker() {
+  while :; do
+    for f in \
+      /sys/class/drm/sde-crtc-0/measured_fps \
+      /sys/class/drm/card0/sde-crtc-0/measured_fps \
+      /sys/class/drm/card0/sde_crtc_fps \
+      /sys/class/graphics/fb0/measured_fps; do
+      [ -r "$f" ] || continue
+      if [ "$HAS_TIMEOUT" = "1" ]; then
+        v=$(timeout 2 cat "$f" 2>/dev/null)
+      else
+        v=$(cat "$f" 2>/dev/null)
+      fi
+      [ -n "$v" ] || continue
+      case "$v" in
+        *"not available"*) continue ;;
+      esac
+      # 先写临时文件再 mv，避免主循环读到半行
+      printf '%s\n' "$v" > "$FPSFILE.tmp" 2>/dev/null && mv "$FPSFILE.tmp" "$FPSFILE" 2>/dev/null
+      break
+    done
+    sleep 2
+  done
+}
+
 emit_drm_fps() {
   [ "$FPS_ENABLED" = "1" ] || return 0
-  for f in \
-    /sys/class/drm/sde-crtc-0/measured_fps \
-    /sys/class/drm/card0/sde-crtc-0/measured_fps \
-    /sys/class/drm/card0/sde_crtc_fps \
-    /sys/class/graphics/fb0/measured_fps; do
-    [ -r "$f" ] || continue
-    # 部分机型的 measured_fps 在显示管线繁忙时会长时间阻塞，必须带超时读
-    if [ "$HAS_TIMEOUT" = "1" ]; then
-      v=$(timeout 1 cat "$f" 2>/dev/null)
-    else
-      v=$(cat "$f" 2>/dev/null)
-    fi
-    [ -n "$v" ] || continue
-    case "$v" in
-      *"not available"*) continue ;;
-    esac
-    printf 'FPSD\t%s\t%s\n' "$f" "$v"
-    return 0
-  done
+  [ -r "$FPSFILE" ] || return 0
+  v=$(cat "$FPSFILE" 2>/dev/null)
+  [ -n "$v" ] || return 0
+  printf 'FPSD\t%s\t%s\n' "$FPSFILE" "$v"
 }
 
 emit_fps() {
@@ -372,8 +391,19 @@ emit_fps() {
   fi
 }
 
+cleanup() {
+  [ -n "$FPS_PID" ] && kill "$FPS_PID" 2>/dev/null
+  rm -f "$FPSFILE" "$FPSFILE.tmp"
+}
+trap cleanup TERM INT
+
 load_cfg
 resolve_pids
+
+if [ "$FPS_ENABLED" = "1" ]; then
+  fps_worker >/dev/null 2>&1 &
+  FPS_PID=$!
+fi
 
 while :; do
   load_cfg

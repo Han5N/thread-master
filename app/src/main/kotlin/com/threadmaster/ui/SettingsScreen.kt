@@ -197,7 +197,7 @@ fun SettingsScreen(vm: MonitorViewModel) {
                 SectionLabel("关于")
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Thread Master 0.2.2",
+                    "Thread Master 0.2.3",
                     color = MiuixTheme.colorScheme.onSurface,
                     fontSize = 13.sp,
                 )

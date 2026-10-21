@@ -72,7 +72,13 @@ class RootShell(private val context: Context) {
     /** 停止采集：先按 pid 文件精确 kill，再兜底销毁进程，避免残留 sh 继续占 CPU。 */
     suspend fun stopSession(session: MonitorSession?) {
         runCatching { session?.process?.destroy() }
-        exec("kill -9 \$(cat $PID_PATH 2>/dev/null) 2>/dev/null; rm -f $PID_PATH; echo TM_STOP_OK", timeoutMs = 4000)
+        exec(
+            "kill -9 \$(cat $PID_PATH 2>/dev/null) 2>/dev/null; " +
+                "pkill -9 -f threadmaster_collect 2>/dev/null; " +
+                "rm -f $PID_PATH /data/local/tmp/threadmaster_fps /data/local/tmp/threadmaster_fps.tmp; " +
+                "echo TM_STOP_OK",
+            timeoutMs = 4000,
+        )
     }
 
     /**
